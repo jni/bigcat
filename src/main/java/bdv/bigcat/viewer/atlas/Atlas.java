@@ -1,8 +1,11 @@
 package bdv.bigcat.viewer.atlas;
 
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -10,6 +13,8 @@ import bdv.bigcat.composite.ARGBCompositeAlphaAdd;
 import bdv.bigcat.composite.Composite;
 import bdv.bigcat.composite.CompositeCopy;
 import bdv.bigcat.composite.CompositeProjector.CompositeProjectorFactory;
+import bdv.bigcat.composite.GradientBackgroundPainter;
+import bdv.bigcat.composite.GradientBackgroundPainter.Factory;
 import bdv.bigcat.viewer.BaseView;
 import bdv.bigcat.viewer.BaseViewState;
 import bdv.bigcat.viewer.ToIdConverter;
@@ -51,10 +56,10 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
+import net.imglib2.Localizable;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.converter.Converter;
 import net.imglib2.converter.RealARGBConverter;
-import net.imglib2.converter.TypeIdentity;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.IntegerType;
@@ -98,7 +103,10 @@ public class Atlas
 	public Atlas( final ViewerOptions viewerOptions, final Interval interval )
 	{
 		super();
-		this.viewerOptions = viewerOptions.accumulateProjectorFactory( new CompositeProjectorFactory<>( composites ) );
+		final BiConsumer< ARGBType, Localizable > bgPixels = ( target, position ) -> {
+			target.set( 255 | 255 << 24 );
+		};
+		this.viewerOptions = viewerOptions.accumulateProjectorFactory( new CompositeProjectorFactory<>( composites, () -> bgPixels ) );
 		this.view = new BaseView( focusHandler.onEnter(), focusHandler.onExit(), new BaseViewState( this.viewerOptions ) );
 		this.view.setBottom( status );
 //		this.view.setInfoNode( this.view.globalSourcesInfoNode() );
@@ -144,8 +152,8 @@ public class Atlas
 		this.background = new WrappedRealRandomAccessible<>( ConstantUtils.constantRealRandomAccessible( new ARGBType( ARGBType.rgba( 0, 0, 0, 0 ) ), interval.numDimensions() ) );
 		this.backgroundSource = new RealRandomAccessibleIntervalSource<>( this.background, interval, new ARGBType(), "background" );
 		final CompositeCopy< ARGBType > comp = new CompositeCopy<>();
-		this.composites.put( this.backgroundSource, comp );
-		this.view.addSource( new SourceAndConverter<>( this.backgroundSource, new TypeIdentity<>() ), comp );
+//		this.composites.put( this.backgroundSource, comp );
+//		this.view.addSource( new SourceAndConverter<>( this.backgroundSource, new TypeIdentity<>() ), comp );
 	}
 
 	public void setBackground( final RealRandomAccessible< ARGBType > background )
@@ -172,7 +180,44 @@ public class Atlas
 		primaryStage.setScene( scene );
 		primaryStage.sizeToScene();
 
-		view.makeDefaultLayout();
+		final ViewerOptions[] options = new ViewerOptions[ 3 ];
+		final GradientBackgroundPainter.Factory[] backgroundCreatorFactories = new GradientBackgroundPainter.Factory[ 3 ];
+		for ( int i = 0; i < options.length; ++i )
+		{
+			final GradientBackgroundPainter.Factory fac = new GradientBackgroundPainter.Factory();
+			backgroundCreatorFactories[ i ] = fac;
+			fac.setDimensions( this.viewerOptions.values.getWidth(), this.viewerOptions.values.getHeight() );
+			final ViewerOptions opts = ViewerOptions.options();
+			opts
+					.doubleBuffered( this.viewerOptions.values.isDoubleBuffered() )
+					.height( this.viewerOptions.values.getHeight() )
+					.inputTriggerConfig( this.viewerOptions.values.getInputTriggerConfig() )
+					.msgOverlay( this.viewerOptions.values.getMsgOverlay() )
+					.numRenderingThreads( this.viewerOptions.values.getNumRenderingThreads() )
+					.screenScales( this.viewerOptions.values.getScreenScales() )
+					.shareKeyPressedEvents( this.viewerOptions.values.getKeyPressedManager() )
+					.targetRenderNanos( this.viewerOptions.values.getTargetRenderNanos() )
+					.transformEventHandlerFactory( this.viewerOptions.values.getTransformEventHandlerFactory() )
+					.useVolatileIfAvailable( this.viewerOptions.values.isUseVolatileIfAvailable() )
+					.accumulateProjectorFactory( new CompositeProjectorFactory<>( composites, fac ) );
+			options[ i ] = opts;
+		}
+
+		final ViewerPanel[] viewers = view.makeDefaultLayout( options );
+
+		for ( int i = 0; i < viewers.length; ++i )
+		{
+			final ViewerPanel viewer = viewers[ i ];
+			final Factory fac = backgroundCreatorFactories[ i ];
+			viewer.addComponentListener( new ComponentAdapter()
+			{
+				@Override
+				public void componentResized( final ComponentEvent e )
+				{
+					fac.setDimensions( viewer.getWidth(), viewer.getHeight() );
+				}
+			} );
+		}
 
 		primaryStage.show();
 

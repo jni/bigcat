@@ -123,12 +123,18 @@ public class BaseView extends BorderPane
 //		this.root.getChildren().add( dummyPane );
 	}
 
-	public void makeDefaultLayout()
+	public ViewerPanel[] makeDefaultLayout( final ViewerOptions... opts )
 	{
-		addViewer( ViewerAxis.Z, 0, 0 );
-		addViewer( ViewerAxis.X, 0, 1 );
-		addViewer( ViewerAxis.Y, 1, 0 );
+		final int numViewers = Math.min( opts.length, 3 );
+		final ViewerPanel[] viewers = new ViewerPanel[ numViewers ];
+		if ( numViewers > 0 )
+			viewers[ 0 ] = addViewer( ViewerAxis.Z, 0, 0, opts[ 0 ] );
+		if ( numViewers > 1 )
+			viewers[ 1 ] = addViewer( ViewerAxis.X, 0, 1, opts[ 1 ] );
+		if ( numViewers > 2 )
+			viewers[ 2 ] = addViewer( ViewerAxis.Y, 1, 0, opts[ 2 ] );
 		this.grid.requestFocus();
+		return viewers;
 	}
 
 	public void setInfoNode( final Node node )
@@ -198,9 +204,9 @@ public class BaseView extends BorderPane
 		} );
 	}
 
-	private synchronized void addViewer( final ViewerAxis axis, final int rowIndex, final int colIndex )
+	private synchronized ViewerPanel addViewer( final ViewerAxis axis, final int rowIndex, final int colIndex, final ViewerOptions options )
 	{
-		final ViewerNode viewerNode = new ViewerNode( new CacheControl.Dummy(), axis, this.state.globalTransform, this.state.viewerOptions );
+		final ViewerNode viewerNode = new ViewerNode( new CacheControl.Dummy(), axis, this.state.globalTransform, options );
 		this.viewerNodes.add( viewerNode );
 		this.managers.put( viewerNode, viewerNode.manager() );
 		viewerNode.manager().setState( this.state.viewerPanelState );
@@ -213,6 +219,7 @@ public class BaseView extends BorderPane
 		viewerNode.setOnMousePressed( resizer.onMousePresedHandler() );
 		viewerNode.setOnMouseDragged( resizer.onMouseDraggedHandler() );
 		viewerNode.setOnMouseMoved( resizer.onMouseMovedHandler() );
+		return ( ViewerPanel ) viewerNode.getContent();
 	}
 
 	private void maximizeActiveOrthoView( final Scene scene, final Event event )

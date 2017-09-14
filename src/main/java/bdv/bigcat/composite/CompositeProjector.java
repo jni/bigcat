@@ -4,12 +4,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 
 import bdv.viewer.Source;
 import bdv.viewer.render.AccumulateProjector;
 import bdv.viewer.render.AccumulateProjectorFactory;
 import bdv.viewer.render.VolatileProjector;
 import net.imglib2.Cursor;
+import net.imglib2.Localizable;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.type.Type;
@@ -24,6 +27,8 @@ public class CompositeProjector< A extends Type< A > > extends AccumulateProject
 	{
 		final private Map< Source< ? >, Composite< A, A > > composites;
 
+		private final Supplier< BiConsumer< A, Localizable > > drawBackgroundPixelAtFactory;
+
 		/**
 		 * Constructor with a map that associates sources and {@link Composite
 		 * Composites}.
@@ -32,7 +37,13 @@ public class CompositeProjector< A extends Type< A > > extends AccumulateProject
 		 */
 		public CompositeProjectorFactory( final Map< Source< ? >, Composite< A, A > > composites )
 		{
+			this( composites, () -> ( a, b ) -> {} );
+		}
+
+		public CompositeProjectorFactory( final Map< Source< ? >, Composite< A, A > > composites, final Supplier< BiConsumer< A, Localizable > > background )
+		{
 			this.composites = composites;
+			this.drawBackgroundPixelAtFactory = background;
 		}
 
 		@Override
@@ -48,6 +59,7 @@ public class CompositeProjector< A extends Type< A > > extends AccumulateProject
 					sourceProjectors,
 					sourceScreenImages,
 					targetScreenImage,
+					drawBackgroundPixelAtFactory.get(),
 					numThreads,
 					executorService );
 
@@ -67,10 +79,11 @@ public class CompositeProjector< A extends Type< A > > extends AccumulateProject
 			final ArrayList< VolatileProjector > sourceProjectors,
 			final ArrayList< ? extends RandomAccessible< ? extends A > > sources,
 			final RandomAccessibleInterval< A > target,
+			final BiConsumer< A, Localizable > background,
 			final int numThreads,
 			final ExecutorService executorService )
 	{
-		super( sourceProjectors, sources, target, numThreads, executorService );
+		super( sourceProjectors, sources, target, background, numThreads, executorService );
 	}
 
 	public void setComposites( final List< Composite< A, A > > composites )
